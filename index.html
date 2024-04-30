@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Literacy Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            background-image: url('image2.jpeg'); /* Ensure this path is correct */
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center; /* Center the background image */
+            margin: 0; /* Remove default margin */
+            padding: 0; /* Remove default padding */
+            height: 100%; /* Ensure the body takes at least the height of the viewport */
+            width: 100%;
+        }
+        .overlay {
+            background-color: rgba(255, 255, 255, 0.5); /* Semi-transparent overlay */
+            padding: 20px;
+        }
+        canvas {
+            background-color: rgba(255, 255, 255, 0.8); /* Canvas background */
+            margin-top: 10px;
+            margin-bottom: 50px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Soft box shadow for depth */
+        }
+        .slider-container {
+            width: 80%; /* Set the width of the slider container */
+            margin: 20px auto; /* Center the container on the page and add some vertical space */
+            text-align: left; /* Center-align the text and slider within the container */
+            padding: 10px; /* Add some padding around the contents */
+            background-color: rgba(255, 255, 255, 0.8); /* Optional: add a light background */
+            border-radius: 8px; /* Optional: round the corners of the container */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Optional: add a shadow for better visibility */
+        }
+
+        #yearRange {
+            width: 50%; /* Make the slider extend the full width of its container */
+            cursor: pointer; /* Changes the cursor type for better user indication */
+        }
+
+        .label{
+            font-size: larger;
+        }
+    </style>
+</head>
+<body>
+<div class="overlay">
+    <h1>World Literacy Visualization</h1>
+    <h2> Group 4 </h2>
+    <h3>
+        The literacy rate of the world is a crucial indicator of global educational levels and has several
+        important implications like:  Economic Development, Employment Opportunities, Social Empowerment,
+        Education Quality and Accessibility, Health, Gender Equality.</h3>
+    <h3>In essence, the literacy rate is a key metric used to gauge a population's educational level and is a determinant factor in a country's human capital.
+        It influences almost every aspect of development and quality of life for individuals and communities.</h3>
+    <h3>The bar graph in the image shows literacy rates for different countries, depicted by the red and purple bars. This graph displays data from 1970 to around 2021. Each bar represents the literacy rate at a specific time point, typically measured annually.
+        The Y-axis likely represents the literacy rate percentage, ranging from 0 to 100.</h3>
+    <div>
+        <label for="countrySelect">Select Country:</label>
+        <select id="countrySelect" onchange="updateGraphs()"></select>
+    </div>
+    <div><canvas id="barChart" width="900" height="250"></canvas></div>
+
+    <div> <h3>The line graph shown in the image indicates the trend of literacy rates for different countries over time. The X-axis represents time, spanning from 1970 to 2021, while the Y-axis likely represents literacy rates as a percentage from 0 to 100.
+        The line is marked at various points with a green indicator, presumably corresponding to the actual literacy rate measurements at different years. </h3>
+    </div>
+    <div><canvas id="lineChart" width=900, height="250"></canvas></div>
+
+
+    <div>
+        <h3>The map in the image is a world map depicting literacy rates for the different years. It is color-coded to indicate the literacy rate percentages in various countries, with different shades of green to orange representing different levels of literacy. The exact scale is shown on the right side of the map with a gradient bar.
+            Typically, darker shades indicate higher literacy rates, while lighter shades suggest lower rates.</h3>
+    </div>
+
+    <div>
+        <label for="yearRange">Select Year:</label>
+        <input type="range" id="yearRange" min="1990" max="2020" step="1" onchange="generateChoroplethMap(this.value)">
+        <span id="selectedYear">1990</span>
+    </div>
+
+
+    <div id="mapGraph" style="width: 100%; height: 800px; opacity: 80%;"></div>
+    <script>
+        var globalData; // To store CSV data globally
+        var barChart, lineChart; // To store the chart instances globally
+
+        // Load and parse the CSV data
+        Papa.parse("literacy.csv", {
+            download: true,
+            header: true,
+            complete: function(results) {
+                globalData = results.data;
+                populateCountryDropdown();
+                populateYearDropdown();
+                updateGraphs();
+                document.getElementById('yearRange').value = '1990'; // Initialize slider
+                generateChoroplethMap('1990'); // Initialize map with default year
+            }
+        });
+
+        function populateCountryDropdown() {
+            var select = document.getElementById('countrySelect');
+            globalData.forEach(function(row) {
+                var option = document.createElement('option');
+                option.value = row['Country Name'];
+                option.textContent = row['Country Name'];
+                select.appendChild(option);
+            });
+        }
+
+        function populateYearDropdown() {
+            var years = Object.keys(globalData[0]).filter(key => !isNaN(key));
+            var dropdown = $('#yearSelect');
+            dropdown.empty();
+            $.each(years, function(index, year) {
+                dropdown.append($('<option></option>').attr('value', year).text(year));
+            });
+            var range = document.getElementById('yearRange');
+            range.min = Math.min(...years);
+            range.max = Math.max(...years);
+            range.value = Math.max(...years); // Set slider to latest year
+        }
+
+        function updateGraphs() {
+            var selectedCountry = document.getElementById('countrySelect').value;
+            var selectedRow = globalData.find(row => row['Country Name'] === selectedCountry);
+            var years = Object.keys(selectedRow).filter(key => !isNaN(key));
+            var values = years.map(year => parseFloat(selectedRow[year]));
+
+            var ctxBar = document.getElementById('barChart').getContext('2d');
+            var ctxLine = document.getElementById('lineChart').getContext('2d');
+
+            if (barChart) barChart.destroy();
+            if (lineChart) lineChart.destroy();
+
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: years,
+                    datasets: [{
+                        label: 'Literacy Rates for ' + selectedCountry, fontstyle: 'bold',
+                        data: values,
+                        backgroundColor: 'rgb(129,31,31)',
+                        borderColor: 'rgb(5,5,243)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    layout: {
+                        padding: {
+                            top: 5,
+                            right: 5,
+                            bottom: 5,
+                            left: 5
+                        }
+                    },
+                    scales: { x: {
+                            ticks: {
+                                autoSkip: true,
+                                maxTicksLimit: 20,
+                                font: {
+                                    size: 16 // Set font size here for x-axis labels
+                                }// Adjust this value based on your desired scale visualization
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            font: {
+                                size: 16
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 16, // Increased font size for the legend labels
+                                    weight: 'bold' // Optional: make the font bold
+                                }
+                            }
+                        }
+                    },
+                    hover: {
+                        mode: 'nearest',
+                        intersect: true
+                    },
+                    animation: {
+                        duration: 1500
+                    }
+                }
+            });
+
+            lineChart = new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: years,
+                    datasets: [{
+                        label: 'Literacy Rates for ' + selectedCountry, fontSize: 100,
+                        data: values,
+                        borderColor: 'rgb(0,0,0)',
+                        backgroundColor: 'rgb(21,243,5)',
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { x: {
+                            ticks: {
+                                autoSkip: true,
+                                maxTicksLimit: 20,
+                                font: {
+                                    size: 16
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            font: {
+                                size: 16
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 16, // Increased font size for the legend labels
+                                    weight: 'bold' // Optional: make the font bold
+                                }
+                            }
+                        }
+                    },
+                    hover: {
+                        mode: 'nearest',
+                        intersect: true
+                    },
+                    animation: {
+                        duration: 1500
+                    }
+                }
+            });
+        }
+
+        function generateChoroplethMap(selectedYear) {
+            document.getElementById('selectedYear').textContent = selectedYear; // Update displayed year
+            var mapData = globalData.map(function(d) {
+                return {
+                    'ISO3': d['Country Code'],
+                    'LiteracyRate': d[selectedYear],
+                    'CountryName': d['Country Name']
+                };
+            }).filter(d => d.LiteracyRate !== null && d.LiteracyRate !== undefined);
+
+            var trace = {
+                type: 'choropleth',
+                locations: mapData.map(d => d.ISO3),
+                z: mapData.map(d => parseFloat(d.LiteracyRate)),
+                text: mapData.map(d => d.CountryName),
+                colorscale: [
+                    [0, 'rgb(240, 249, 232)'],
+                    [0.5, 'rgb(236,169,120)'],
+                    [1, 'rgb(0, 109, 44)']
+                ],
+                autocolorscale: false,
+                reversescale: false,
+                marker: { line: { color: 'darkgray', width: 0.5 } },
+                colorbar: { title: 'Literacy Rate (%)', thickness: 10 }
+            };
+
+            var layout = {
+                title: `World Literacy Rates (${selectedYear})`,
+                geo: {
+                    showframe: false,
+                    showcoastlines: true,
+                    projection: { type: 'mercator' }
+                }
+            };
+
+            Plotly.newPlot('mapGraph', [trace], layout);
+        }
+    </script>
+</div>
+</body>
+</html>
